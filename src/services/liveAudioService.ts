@@ -7,7 +7,7 @@
  */
 
 export interface LiveVoiceCallbacks {
-  onStatusChange?: (status: 'disconnected' | 'connecting' | 'connected' | 'error') => void;
+  onStatusChange?: (status: 'disconnected' | 'connecting' | 'connected' | 'error' | 'unavailable') => void;
   onAudioLevel?: (inputLevel: number, outputLevel: number) => void;
   onInterrupted?: () => void;
   onError?: (error: Error) => void;
@@ -24,26 +24,41 @@ export class LiveVoiceService {
   private nextStartTime = 0;
   private activeSources: AudioBufferSourceNode[] = [];
   private callbacks: LiveVoiceCallbacks = {};
+  private status: 'disconnected' | 'connecting' | 'connected' | 'error' | 'unavailable' = 'disconnected';
 
   public async start(callbacks: LiveVoiceCallbacks) {
     this.callbacks = callbacks;
-    this.callbacks.onStatusChange?.('connecting');
+    this.setStatus('connecting');
 
     try {
-      // 1. Establish WebSocket connection to backend Live bridge
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/live`;
       this.ws = new WebSocket(wsUrl);
 
-      this.ws.onopen = async () => {
-        this.isConnected = true;
-        this.callbacks.onStatusChange?.('connected');
-        await this.startAudioStream();
-      };
+      this.ws.onopen = () => {};
 
-      this.ws.onmessage = (event) => {
+      this.ws.onmessage = async (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.status === 'connected') {
+            try {
+              await this.startAudioStream();
+              this.isConnected = true;
+              this.setStatus('connected');
+            } catch (err) {
+              this.callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+              this.setStatus('error');
+              this.cleanupAudio();
+              this.ws?.close();
+            }
+            return;
+          }
+          if (msg.status === 'unavailable') {
+            this.setStatus('unavailable');
+            this.callbacks.onError?.(new Error(msg.message || 'Live Voice is unavailable.'));
+            this.ws?.close();
+            return;
+          }
           if (msg.audio) {
             this.playAudioChunk(msg.audio);
           }
@@ -65,68 +80,70 @@ export class LiveVoiceService {
       this.ws.onerror = (err) => {
         console.warn('Live WebSocket error:', err);
         this.callbacks.onError?.(new Error('WebSocket connection error'));
-        this.callbacks.onStatusChange?.('error');
+        this.setStatus('error');
       };
 
       this.ws.onclose = () => {
         this.isConnected = false;
-        this.callbacks.onStatusChange?.('disconnected');
+        if (this.status !== 'unavailable' && this.status !== 'error') {
+          this.setStatus('disconnected');
+        }
         this.cleanupAudio();
       };
     } catch (e: any) {
       this.callbacks.onError?.(e);
-      this.callbacks.onStatusChange?.('error');
+      this.setStatus('error');
     }
   }
 
   private async startAudioStream() {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      // Input context at 16kHz for Live API
-      this.inputAudioCtx = new AudioCtx({ sampleRate: 16000 });
-      // Output context at 24kHz for Gemini Live audio playback
-      this.outputAudioCtx = new AudioCtx({ sampleRate: 24000 });
-      this.nextStartTime = this.outputAudioCtx.currentTime;
-
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
-      const source = this.inputAudioCtx.createMediaStreamSource(this.mediaStream);
-      this.scriptProcessor = this.inputAudioCtx.createScriptProcessor(4096, 1, 1);
-
-      source.connect(this.scriptProcessor);
-      this.scriptProcessor.connect(this.inputAudioCtx.destination);
-
-      this.scriptProcessor.onaudioprocess = (e) => {
-        if (!this.isConnected || this.ws?.readyState !== WebSocket.OPEN) return;
-
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Calculate input level for visualizer
-        let sum = 0;
-        for (let i = 0; i < inputData.length; i++) {
-          sum += inputData[i] * inputData[i];
-        }
-        const rms = Math.sqrt(sum / inputData.length);
-        const level = Math.min(100, Math.round(rms * 180));
-        this.callbacks.onAudioLevel?.(level, 0);
-
-        // Convert Float32 to 16-bit PCM little-endian
-        const pcmBuffer = this.floatTo16BitPCM(inputData);
-        const base64Audio = this.arrayBufferToBase64(pcmBuffer);
-
-        this.ws.send(JSON.stringify({ audio: base64Audio }));
-      };
-    } catch (err: any) {
-      console.error('Failed to start Live audio stream:', err);
-      this.callbacks.onError?.(err);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Microphone capture is not supported in this browser.');
     }
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) throw new Error('Web Audio is not supported in this browser.');
+
+    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+
+    this.inputAudioCtx = new AudioCtx({ sampleRate: 16000 });
+    this.outputAudioCtx = new AudioCtx({ sampleRate: 24000 });
+    this.nextStartTime = this.outputAudioCtx.currentTime;
+
+    const source = this.inputAudioCtx.createMediaStreamSource(this.mediaStream);
+    this.scriptProcessor = this.inputAudioCtx.createScriptProcessor(4096, 1, 1);
+
+    source.connect(this.scriptProcessor);
+    this.scriptProcessor.connect(this.inputAudioCtx.destination);
+
+    this.scriptProcessor.onaudioprocess = (e) => {
+      if (!this.isConnected || this.ws?.readyState !== WebSocket.OPEN) return;
+
+      const inputData = e.inputBuffer.getChannelData(0);
+      let sum = 0;
+      for (let i = 0; i < inputData.length; i++) {
+        sum += inputData[i] * inputData[i];
+      }
+      const rms = Math.sqrt(sum / inputData.length);
+      const level = Math.min(100, Math.round(rms * 180));
+      this.callbacks.onAudioLevel?.(level, 0);
+
+      const pcmBuffer = this.floatTo16BitPCM(inputData);
+      const base64Audio = this.arrayBufferToBase64(pcmBuffer);
+      this.ws?.send(JSON.stringify({ audio: base64Audio }));
+    };
+  }
+
+  private setStatus(status: 'disconnected' | 'connecting' | 'connected' | 'error' | 'unavailable') {
+    this.status = status;
+    this.callbacks.onStatusChange?.(status);
   }
 
   private playAudioChunk(base64Data: string) {
@@ -206,7 +223,7 @@ export class LiveVoiceService {
       this.ws = null;
     }
 
-    this.callbacks.onStatusChange?.('disconnected');
+    this.setStatus('disconnected');
   }
 
   private cleanupAudio() {

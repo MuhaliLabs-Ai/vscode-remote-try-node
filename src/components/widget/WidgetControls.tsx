@@ -18,7 +18,7 @@ interface WidgetControlsProps {
   status: SessionStatus;
   audioLevel: number;
   liveVoiceAudioLevel?: number;
-  liveVoiceStatus?: 'disconnected' | 'connecting' | 'connected' | 'error';
+  liveVoiceStatus?: 'disconnected' | 'connecting' | 'connected' | 'error' | 'unavailable';
   isLiveVoiceActive?: boolean;
   useSearchGrounding?: boolean;
   voicePersona?: string;

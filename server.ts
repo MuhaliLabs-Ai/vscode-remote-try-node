@@ -6,6 +6,8 @@ import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { generateConceptFallbackAnswer } from './src/services/answerFallback';
+import { detectLocalQuestion } from './src/services/questionDetection';
 
 dotenv.config();
 
@@ -43,9 +45,10 @@ app.get('/api/health', (_req: Request, res: Response) => {
     service: 'applebee-interview-intelligence',
     aiConfigured: Boolean(apiKey),
     features: {
-      liveVoiceModel: 'gemini-3.8-live',
-      searchGroundingModel: 'gemini-3.8-flash',
-      transcriptionModel: 'gemini-3.5-transcribe',
+      structuredAnswers: true,
+      liveVoice: Boolean(apiKey),
+      searchGrounding: Boolean(apiKey),
+      clientSpeechRecognition: 'browser-dependent',
     },
     timestamp: new Date().toISOString(),
   });
@@ -123,6 +126,9 @@ const CURATED_SOURCES: Record<string, Array<{ title: string; url: string; domain
 
 function generateFallbackAnswer(question: string, role?: string) {
   const lower = question.toLowerCase();
+  const conceptAnswer = generateConceptFallbackAnswer(question);
+  if (conceptAnswer) return conceptAnswer;
+
   let questionType: 'technical' | 'behavioural' | 'coding' | 'architecture' | 'security' | 'troubleshooting' | 'general' = 'technical';
   
   if (lower.includes('tell me about a time') || lower.includes('conflict') || lower.includes('failure') || lower.includes('led a team') || lower.includes('proudest')) {
@@ -138,7 +144,10 @@ function generateFallbackAnswer(question: string, role?: string) {
   }
 
   // Specialized .NET & Azure Cloud Architecture (Exact User Exemplar)
-  if (lower.includes('.net') || lower.includes('azure') || lower.includes('c#') || lower.includes('asp.net')) {
+  if (
+    /\.net|azure|c#|asp\.net/i.test(question) &&
+    /design|architect|scale|api|cloud|microservice|distributed/i.test(question)
+  ) {
     return {
       question,
       questionType: 'architecture',
@@ -337,45 +346,20 @@ function solveOptimal(items: number[], target: number): [number, number] | null 
     };
   }
 
+  return null;
+}
+
+function markFallbackUnverified(answer: any) {
   return {
-    question,
-    questionType,
-    quickAnswer: 'Address the core constraint directly with high precision, highlight the architectural mechanism, and emphasize production reliability.',
-    talkingPoints: [
-      'Define the underlying operational model and foundational abstractions.',
-      'Highlight concrete failure modes, concurrency guarantees, and observability.',
-      'Contrast against alternative standard patterns with explicit pros and cons.',
-      'Ground the explanation in modern production deployment standards.',
-    ],
-    explanation: 'A comprehensive technical answer anchors itself on real-world engineering primitives. By articulating both standard-path execution and edge-case handling, you demonstrate deep practical mastery rather than surface-level definitions.',
-    tradeoffs: [
-      'Optimizing for maximum throughput often introduces latency jitter.',
-      'Strict consistency models reduce write availability during cross-datacenter partitions.',
-    ],
-    visualization: {
-      type: 'comparison',
-      title: 'Architectural Tradeoff Matrix',
-      description: 'Comparing primary design options against key engineering criteria.',
-      data: {
-        optionA: {
-          name: 'Synchronous REST / gRPC',
-          pros: ['Instant consistency', 'Simple mental model', 'Native client tooling'],
-          cons: ['Cascading timeout vulnerability', 'High coupling', 'Poor burst tolerance'],
-        },
-        optionB: {
-          name: 'Asynchronous Event Broker',
-          pros: ['Decoupled elasticity', 'Built-in backpressure', 'Replayable history'],
-          cons: ['Eventual consistency lag', 'Operational complexity', 'Distributed debugging overhead'],
-        },
-      },
-    },
-    followUps: [
-      'How would you instrument distributed tracing to diagnose tail latency in this flow?',
-      'What automated testing gates would you require prior to rolling this out to production?',
-    ],
-    sources: CURATED_SOURCES.architecture,
-    verificationStatus: 'verified_doc' as const,
-    uncertainties: ['Verify specific SLA requirements (e.g. p99 < 50ms) for the targeted system.'],
+    ...answer,
+    generationMode: 'local_fallback',
+    verificationStatus: 'unverified',
+    searchGrounded: false,
+    webSearchQueries: [],
+    sources: (answer.sources || []).map((source: any) => ({
+      ...source,
+      verificationStatus: 'unverified',
+    })),
   };
 }
 
@@ -394,22 +378,9 @@ app.post('/api/interview/detect-question', async (req: Request, res: Response) =
     }
 
     const textToAnalyze = combinedText || transcript;
-    const questionMarks = (textToAnalyze.match(/\?/g) || []).length;
-    const hasQuestionWords = /^(how|what|why|explain|describe|can you|tell me|walk me|could you|design|compare|is there)/i.test(textToAnalyze.trim()) ||
-      /(how would you|what is the difference|can you tell me|why do we|walk me through|how do you)/i.test(textToAnalyze);
 
     if (!ai) {
-      if (questionMarks > 0 || hasQuestionWords || textToAnalyze.length > 25) {
-        const cleanQuestion = textToAnalyze.replace(/^(um|uh|so|like|well)\s+/i, '').trim();
-        res.json({
-          hasQuestion: true,
-          question: cleanQuestion.endsWith('?') ? cleanQuestion : `${cleanQuestion}?`,
-          questionType: 'technical',
-          confidence: 0.88,
-        });
-        return;
-      }
-      res.json({ hasQuestion: false });
+      res.json(detectLocalQuestion(textToAnalyze, currentQuestion));
       return;
     }
 
@@ -449,7 +420,7 @@ Respond with strict JSON ONLY:
 // 2. Structured Answer with Google Search Grounding (`gemini-3.8-flash`)
 app.post('/api/interview/answer', async (req: Request, res: Response) => {
   try {
-    const { question, context, role, useSearchGrounding = true } = req.body;
+    const { question, context, role, profile, useSearchGrounding = true } = req.body;
 
     if (!question || typeof question !== 'string') {
       res.status(400).json({ error: 'Question is required' });
@@ -458,7 +429,11 @@ app.post('/api/interview/answer', async (req: Request, res: Response) => {
 
     if (!ai) {
       const fallback = generateFallbackAnswer(question, role);
-      res.json(fallback);
+      if (!fallback) {
+        res.status(503).json({ error: 'AI answer generation is unavailable and no local answer exists for this question.' });
+        return;
+      }
+      res.json(markFallbackUnverified(fallback));
       return;
     }
 
@@ -507,13 +482,28 @@ Provide an authoritative factual overview and citing official technical referenc
     }
 
     // Generate strict JSON structured interview answer card
+    const profileContext = profile
+      ? JSON.stringify({
+          targetRole: profile.targetRole,
+          yearsOfExperience: profile.yearsOfExperience,
+          primarySkills: profile.primarySkills,
+          cloudPlatforms: profile.cloudPlatforms,
+          frameworks: profile.frameworks,
+          projects: profile.verifiedProjects,
+          leadershipHighlights: profile.leadershipHighlights,
+        })
+      : 'No candidate-provided profile.';
+
     const systemPrompt = `You are the lead technical intelligence engine for Applebee Interview Intelligence.
 A candidate is currently in a live engineering/technical interview for: ${role || 'Senior Software Engineer / Architect'}.
 The interviewer just asked:
 "${question}"
 
 Additional conversation context: ${context || 'None'}
+Candidate-reported background (not independently verified): ${profileContext}
 Google Search queries analyzed: ${webSearchQueries.join(', ') || 'Standard cloud architecture'}
+
+Never invent candidate projects, employers, years of experience, metrics, or achievements. Use only details present in the candidate-reported background; otherwise give a general technical answer or explicitly ask the candidate to supply a real example.
 
 Provide an authoritative, high-density, glanceable interview answer that the candidate can review in 5 seconds while speaking.
 Requirements:
@@ -549,24 +539,39 @@ Output MUST be valid JSON conforming to this schema without extra wrapping.`;
       parsedAnswer = JSON.parse(raw);
     } catch {
       parsedAnswer = generateFallbackAnswer(question, role);
+      if (!parsedAnswer) {
+        res.status(502).json({ error: 'The AI answer could not be parsed and no local answer exists for this question.' });
+        return;
+      }
+      parsedAnswer = markFallbackUnverified(parsedAnswer);
     }
 
     // Merge Google Search grounding chunks if retrieved
     if (searchSources.length > 0) {
       parsedAnswer.sources = [...searchSources.slice(0, 4), ...(parsedAnswer.sources || []).slice(0, 2)];
       parsedAnswer.verificationStatus = 'verified_doc';
-    } else if (!parsedAnswer.sources || parsedAnswer.sources.length === 0) {
-      parsedAnswer.sources = CURATED_SOURCES.architecture;
+    } else {
+      parsedAnswer.sources = (parsedAnswer.sources || []).map((source: any) => ({
+        ...source,
+        verificationStatus: 'unverified',
+      }));
+      parsedAnswer.verificationStatus = 'unverified';
     }
 
     parsedAnswer.searchGrounded = searchSources.length > 0;
     parsedAnswer.webSearchQueries = webSearchQueries;
+    parsedAnswer.generationMode = parsedAnswer.generationMode || 'ai';
 
     res.json(parsedAnswer);
   } catch (error: any) {
     console.error('Error generating answer:', error?.message);
-    const fallback = generateFallbackAnswer(req.body.question || 'Interview Question', req.body.role);
-    res.json(fallback);
+    const question = req.body.question || '';
+    const fallback = generateFallbackAnswer(question, req.body.role);
+    if (!fallback) {
+      res.status(502).json({ error: 'AI answer generation failed and no local answer exists for this question.' });
+      return;
+    }
+    res.json(markFallbackUnverified(fallback));
   }
 });
 
@@ -580,11 +585,14 @@ app.post('/api/interview/search-grounding', async (req: Request, res: Response) 
     }
 
     if (!ai) {
-      res.json({
+      res.status(503).json({
         query,
-        summary: 'Official documentation confirms standard distributed design protocols.',
-        sources: CURATED_SOURCES.architecture,
-        webSearchQueries: [query],
+        error: 'Search grounding is unavailable because GEMINI_API_KEY is not configured.',
+        summary: '',
+        sources: [],
+        webSearchQueries: [],
+        searchGrounded: false,
+        verificationStatus: 'unverified',
       });
       return;
     }
@@ -619,18 +627,21 @@ app.post('/api/interview/search-grounding', async (req: Request, res: Response) 
 
     res.json({
       query,
-      summary: response.text || 'Official technical documentation and industry standards ground this inquiry.',
-      sources: sources.length > 0 ? sources : (CURATED_SOURCES.security || CURATED_SOURCES.architecture),
-      webSearchQueries: webSearchQueries.length > 0 ? webSearchQueries : [query],
+      summary: response.text || '',
+      sources,
+      webSearchQueries,
+      searchGrounded: sources.length > 0,
+      verificationStatus: sources.length > 0 ? 'verified_doc' : 'unverified',
     });
   } catch (err: any) {
     console.warn('Search grounding API notice (quota/network):', err?.message);
-    const query = req.body?.query || 'Technical Architecture Query';
-    res.json({
-      query,
-      summary: 'Verified technical specifications and reference documentation for: ' + query,
-      sources: CURATED_SOURCES.security || CURATED_SOURCES.architecture,
-      webSearchQueries: [query],
+    res.status(502).json({
+      error: 'Search grounding failed. No verified sources are available for this query.',
+      summary: '',
+      sources: [],
+      webSearchQueries: [],
+      searchGrounded: false,
+      verificationStatus: 'unverified',
     });
   }
 });
@@ -655,6 +666,7 @@ app.post('/api/interview/evaluate-answer', async (req: Request, res: Response) =
 
       res.json({
         score: baseScore,
+        evaluationMode: 'heuristic',
         feedback: `Strong technical structure. Your answer articulates core operational realities with clear prioritization. ${mentionsTradeoffs ? 'Good identification of architectural trade-offs.' : 'Consider proactively noting edge-case trade-offs.'}`,
         rubricScores: {
           clarityAndStructure: Math.min(100, baseScore + 2),
@@ -678,7 +690,7 @@ app.post('/api/interview/evaluate-answer', async (req: Request, res: Response) =
 Target Role: ${role || 'Staff Engineer'}
 Interview Question: "${question}"
 Candidate Answer: "${candidateAnswer}"
-Candidate Verified Background: ${profile?.targetRole || 'Senior Engineer'}, ${profile?.yearsOfExperience || 8} years experience.
+Candidate-reported background (not independently verified): ${profile?.targetRole || 'not provided'}, ${profile?.yearsOfExperience ?? 'unspecified'} years experience.
 
 Evaluate the response across 4 criteria (each 0-100):
 1. clarityAndStructure (STAR framework / logical progression)
@@ -709,21 +721,10 @@ Output strict JSON ONLY:
     });
 
     const parsed = JSON.parse(response.text?.trim() || '{}');
-    res.json(parsed);
+    res.json({ ...parsed, evaluationMode: 'ai' });
   } catch (error: any) {
     console.error('Answer evaluation error:', error?.message);
-    res.json({
-      score: 82,
-      feedback: 'Good structural delivery. Demonstrated clear operational understanding and architectural fundamentals.',
-      rubricScores: {
-        clarityAndStructure: 85,
-        technicalDepth: 84,
-        tradeoffsArticulation: 78,
-        productionReadiness: 81,
-      },
-      strengths: ['Clear terminology', 'Addresses the core constraint directly'],
-      improvements: ['State specific SLA targets earlier in the response'],
-    });
+    res.status(502).json({ error: 'AI answer evaluation failed. Please retry when the evaluation service is available.' });
   }
 });
 
@@ -766,9 +767,19 @@ wss.on('connection', async (clientWs: WebSocket) => {
             }
 
             const outputTrans = (message.serverContent as any)?.outputAudioTranscription?.text;
+            const inputTrans = (message.serverContent as any)?.inputTranscription?.text;
             const transcription = modelText || outputTrans;
 
             if (clientWs.readyState === WebSocket.OPEN) {
+              if (inputTrans) {
+                clientWs.send(
+                  JSON.stringify({
+                    transcription: inputTrans,
+                    turnComplete: true,
+                    role: 'unknown',
+                  })
+                );
+              }
               if (audioData || transcription) {
                 clientWs.send(
                   JSON.stringify({
@@ -798,16 +809,16 @@ wss.on('connection', async (clientWs: WebSocket) => {
       console.warn('[Gemini Live API] Connect warning:', err?.message);
       clientWs.send(
         JSON.stringify({
-          status: 'fallback',
-          message: 'Live voice simulation active',
+          status: 'unavailable',
+          message: 'The Live Voice provider connection failed. Check the server key, model access, and network logs.',
         })
       );
     }
   } else {
     clientWs.send(
       JSON.stringify({
-        status: 'simulated',
-        model: 'gemini-3.8-live-mock',
+        status: 'unavailable',
+        message: 'Live Voice requires GEMINI_API_KEY. Configure the server key and restart the app.',
       })
     );
   }

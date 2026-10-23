@@ -179,6 +179,9 @@ export const MockInterviewEvaluator: React.FC<MockInterviewEvaluatorProps> = ({ 
                     Evaluation Assessment
                   </span>
                   <div className="text-sm font-semibold text-zinc-100">Senior Technical Score</div>
+                  <span className="text-[10px] text-zinc-500">
+                    {mockEvaluation.evaluationMode === 'heuristic' ? 'Heuristic estimate (AI unavailable)' : 'AI rubric evaluation'}
+                  </span>
                 </div>
                 <div className="w-12 h-12 rounded-full bg-purple-950 border border-purple-500/50 flex items-center justify-center font-bold text-lg text-purple-300 font-mono">
                   {mockEvaluation.score}

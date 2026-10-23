@@ -6,6 +6,10 @@ export interface SpeechRecognitionCallbacks {
   onEnd: () => void;
 }
 
+export function getSpeechSegmentId(currentSegmentId: string | null, createId: () => string): string {
+  return currentSegmentId || createId();
+}
+
 export class SpeechRecognitionService {
   private recognition: any = null;
   private isListening = false;
@@ -14,6 +18,8 @@ export class SpeechRecognitionService {
   private simulationTimer: any = null;
 
   constructor() {
+    if (typeof window === 'undefined') return;
+
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -31,6 +37,8 @@ export class SpeechRecognitionService {
   }
 
   public isSupported(): boolean {
+    if (typeof window === 'undefined') return false;
+
     return Boolean(
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     );
@@ -56,9 +64,10 @@ export class SpeechRecognitionService {
         const isFinal = result.isFinal;
         const confidence = result[0].confidence || 0.95;
 
-        if (!this.currentSegmentId || isFinal) {
-          this.currentSegmentId = 'seg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-        }
+        this.currentSegmentId = getSpeechSegmentId(
+          this.currentSegmentId,
+          () => 'seg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
+        );
 
         const segment: TranscriptSegment = {
           id: this.currentSegmentId,
@@ -66,7 +75,7 @@ export class SpeechRecognitionService {
           timestamp: Date.now(),
           isFinal,
           confidence,
-          speaker: 'interviewer',
+          speaker: 'unknown',
         };
 
         callbacks.onSegment(segment);

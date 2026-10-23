@@ -33,35 +33,14 @@ const DEFAULT_PREFERENCES: WidgetPreferences = {
 };
 
 const DEFAULT_CANDIDATE_PROFILE: CandidateProfile = {
-  name: 'Alex Mercer',
-  targetRole: 'Staff Distributed Systems & Azure Cloud Architect',
-  yearsOfExperience: 9,
-  primarySkills: ['C# / .NET 9', 'Azure Cloud', 'System Design', 'Microservices', 'Distributed Caching'],
-  cloudPlatforms: ['Azure', 'AWS', 'GCP'],
-  frameworks: ['ASP.NET Core', 'Azure Kubernetes Service', 'Redis', 'Kafka', 'React'],
-  verifiedProjects: [
-    {
-      id: 'proj_1',
-      title: 'High-Throughput Financial Billing & Quota Engine on Azure',
-      role: 'Lead Cloud Architect',
-      techStack: '.NET 8, Azure API Management, Azure Cosmos DB, Redis, AKS',
-      architectureSummary: 'Designed stateless ASP.NET Core microservices processing 60,000 req/sec with sub-5ms p99 latency and active-active multi-region failover.',
-      measurableOutcome: 'Zero data loss during peak surge, 99.995% SLA, and $450k annual cloud compute savings.',
-    },
-    {
-      id: 'proj_2',
-      title: 'Zero-Downtime Distributed Cache & Stream Modernization',
-      role: 'Staff Infrastructure Engineer',
-      techStack: 'Apache Kafka, Redis Cluster, Docker, OpenTelemetry',
-      architectureSummary: 'Replaced legacy synchronous HTTP service chains with event-driven pub/sub architecture and read-through caching.',
-      measurableOutcome: 'Eliminated cascading timeout outages and reduced 99th percentile API latency from 240ms to 18ms.',
-    },
-  ],
-  leadershipHighlights: [
-    'Authored 14 architectural RFCs adopted across 6 cross-functional engineering teams.',
-    'Chaired bi-weekly technical review board for distributed data consistency and API contracts.',
-    'Mentored 8 senior and mid-level engineers to technical lead promotions.',
-  ],
+  name: '',
+  targetRole: 'Senior .NET & Azure Cloud Architect',
+  yearsOfExperience: 0,
+  primarySkills: [],
+  cloudPlatforms: [],
+  frameworks: [],
+  verifiedProjects: [],
+  leadershipHighlights: [],
 };
 
 export function useInterviewSession() {
@@ -69,7 +48,7 @@ export function useInterviewSession() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [liveVoiceAudioLevel, setLiveVoiceAudioLevel] = useState<number>(0);
-  const [liveVoiceStatus, setLiveVoiceStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const [liveVoiceStatus, setLiveVoiceStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error' | 'unavailable'>('disconnected');
   const [sessionDuration, setSessionDuration] = useState<number>(0);
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState<AnswerModel | null>(null);
@@ -187,34 +166,30 @@ export function useInterviewSession() {
           }),
         });
 
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(`Answer service returned HTTP ${response.status}`);
+          throw new Error(data.error || `Answer service returned HTTP ${response.status}`);
         }
-
-        const data = await response.json();
+        if (typeof data.quickAnswer !== 'string' || !Array.isArray(data.talkingPoints)) {
+          throw new Error('Answer service returned an incomplete response.');
+        }
         const newAnswer: AnswerModel = {
           id: 'ans_' + Date.now(),
           question: data.question || questionText,
           questionType: data.questionType || questionType || 'technical',
-          quickAnswer: data.quickAnswer || 'Focus on structural tradeoffs and architectural guarantees.',
-          talkingPoints: data.talkingPoints || [
-            'Clarify scale requirements and latency expectations.',
-            'Apply resilient decoupling with caching and circuit breakers.',
-            'Guarantee observability through distributed tracing.',
-          ],
-          explanation: data.explanation || 'Detailed architectural breakdown grounded in production standards.',
-          tradeoffs: data.tradeoffs || ['Eventual consistency vs immediate consistency latency.'],
+          quickAnswer: data.quickAnswer,
+          talkingPoints: data.talkingPoints,
+          explanation: data.explanation || '',
+          tradeoffs: data.tradeoffs || [],
           visualization: data.visualization || null,
-          followUps: data.followUps || [
-            'How would you handle database bottlenecks?',
-            'What failover strategy handles zone partition?',
-          ],
+          followUps: data.followUps || [],
           sources: data.sources || [],
-          verificationStatus: data.verificationStatus || 'verified_doc',
+          verificationStatus: data.verificationStatus || 'unverified',
           uncertainties: data.uncertainties || [],
           timestamp: Date.now(),
           searchGrounded: data.searchGrounded || false,
           webSearchQueries: data.webSearchQueries || [],
+          generationMode: data.generationMode || 'ai',
           personalizedProjectContext: candidateProfile.verifiedProjects[0]?.title,
         };
 
@@ -250,9 +225,12 @@ export function useInterviewSession() {
           }),
         });
         const evalData = await res.json();
+        if (!res.ok) {
+          throw new Error(evalData.error || `Evaluation service returned HTTP ${res.status}`);
+        }
         setMockEvaluation(evalData);
       } catch (err) {
-        console.warn('Evaluation fallback:', err);
+        setErrorMessage(`Evaluation unavailable: ${err instanceof Error ? err.message : 'Unknown service error'}`);
       } finally {
         setIsEvaluating(false);
       }
@@ -337,15 +315,18 @@ export function useInterviewSession() {
         },
       });
 
-      speechService.start({
+      const speechStarted = speechService.start({
         onSegment: handleNewSegment,
         onError: (err) => {
-          console.warn('Speech service notice:', err.message);
+          setErrorMessage(err.message);
         },
         onEnd: () => {},
       });
 
       setStatus('listening');
+      if (!speechStarted) {
+        setErrorMessage('Microphone is active, but speech recognition is not supported in this browser.');
+      }
 
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
@@ -377,28 +358,41 @@ export function useInterviewSession() {
           setLiveVoiceAudioLevel(Math.max(inLvl, outLvl));
         },
         onTranscription: (text, isModel, isTurnComplete) => {
-          setIsModelSpeaking(true);
-          // Convert spoken voice directly back into dynamic visual explanation
-          setCurrentAnswer((prev) => {
-            const mapped = mapSpokenTranscriptToVisual(
-              text,
-              prev?.visualization || null,
-              prev?.questionType || 'architecture'
-            );
-            setActiveVoiceEntities(mapped.activeEntities);
-            setLiveVoiceHighlightSummary(mapped.highlightSummary);
+          setIsModelSpeaking(isModel && !isTurnComplete);
+          if (!isModel && isTurnComplete) {
+            analyzeTranscriptForQuestion([
+              {
+                id: `live_input_${Date.now()}`,
+                speaker: 'unknown',
+                text,
+                timestamp: Date.now(),
+                isFinal: true,
+              },
+            ]);
+          }
+          if (isModel) {
+            setCurrentAnswer((prev) => {
+              const mapped = mapSpokenTranscriptToVisual(
+                text,
+                prev?.visualization || null,
+                prev?.questionType || 'architecture'
+              );
+              setActiveVoiceEntities(mapped.activeEntities);
+              setLiveVoiceHighlightSummary(mapped.highlightSummary);
 
-            if (!prev) return prev;
-            return {
-              ...prev,
-              visualization: mapped.visualization,
-            };
-          });
+              if (!prev) return prev;
+              return {
+                ...prev,
+                visualization: mapped.visualization,
+              };
+            });
+          }
 
           // Also record into transcript stream
           setTranscript((prev) => {
             const lastSegment = prev[prev.length - 1];
-            if (lastSegment && lastSegment.speaker === 'interviewer' && !lastSegment.isFinal) {
+            const speaker = isModel ? 'assistant' : 'unknown';
+            if (lastSegment && lastSegment.speaker === speaker && !lastSegment.isFinal) {
               const updated = [...prev];
               updated[updated.length - 1] = {
                 ...lastSegment,
@@ -411,7 +405,7 @@ export function useInterviewSession() {
                 ...prev,
                 {
                   id: 'live_voice_' + Date.now(),
-                  speaker: 'interviewer' as const,
+                  speaker,
                   text,
                   timestamp: Date.now(),
                   isFinal: isTurnComplete,
@@ -437,7 +431,7 @@ export function useInterviewSession() {
       setErrorMessage(`Live voice initialization error: ${e.message}`);
       updatePreferences({ voiceMode: false });
     }
-  }, [preferences.voiceMode, updatePreferences]);
+  }, [preferences.voiceMode, updatePreferences, analyzeTranscriptForQuestion]);
 
   // High-fidelity voice simulation helper: transcribes voice responses chunk-by-chunk and animates visual topology live
   const simulateVoiceResponseAndVisualize = useCallback(
@@ -588,18 +582,18 @@ export function useInterviewSession() {
   // Compute readiness metrics dynamically
   const readinessMetrics: ReadinessMetrics = {
     topicCoverage: {
-      systemDesign: Math.min(100, 40 + answerHistory.filter((a) => a.questionType === 'architecture').length * 20),
-      azureDotNetCloud: Math.min(100, 45 + (answerHistory.some((a) => a.question.toLowerCase().includes('.net') || a.question.toLowerCase().includes('azure')) ? 35 : 15)),
-      codingAlgorithms: Math.min(100, 30 + answerHistory.filter((a) => a.questionType === 'coding').length * 25),
-      securityZeroTrust: Math.min(100, 35 + answerHistory.filter((a) => a.questionType === 'security').length * 25),
-      behavioralLeadership: Math.min(100, 50 + answerHistory.filter((a) => a.questionType === 'behavioural').length * 25),
+      systemDesign: Math.min(100, answerHistory.filter((a) => a.questionType === 'architecture').length * 20),
+      azureDotNetCloud: Math.min(100, answerHistory.filter((a) => /\.net|azure/i.test(a.question)).length * 20),
+      codingAlgorithms: Math.min(100, answerHistory.filter((a) => a.questionType === 'coding').length * 20),
+      securityZeroTrust: Math.min(100, answerHistory.filter((a) => a.questionType === 'security').length * 20),
+      behavioralLeadership: Math.min(100, answerHistory.filter((a) => a.questionType === 'behavioural').length * 20),
     },
     totalQuestionsAnswered: detectedQuestionCount,
-    averageConfidence: mockEvaluation ? mockEvaluation.score : 88,
+    averageConfidence: mockEvaluation?.score ?? 0,
     revisionItems: [
-      'Proactively state latency SLAs (p99 < 5ms) when discussing Azure API Management rate limiting.',
-      'Highlight Polly exponential backoff with circuit breaker jitter on transient Azure SQL timeouts.',
-      'Elaborate on Cosmos DB multi-master write conflict resolution policies.',
+      'State workload assumptions and measurable service-level objectives when discussing scalability.',
+      'Explain retry, circuit-breaker, idempotency, and timeout trade-offs for transient failures.',
+      'Compare relational and partitioned NoSQL consistency and failure modes against the workload.',
     ],
   };
 

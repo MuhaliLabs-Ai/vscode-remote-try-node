@@ -261,16 +261,24 @@ export const ThreePanelInterviewCockpit: React.FC<ThreePanelInterviewCockpitProp
                   >
                     <div className="flex items-center justify-between text-[10px] text-zinc-500 mb-0.5">
                       <span className="font-semibold text-purple-400">
-                        {seg.speaker === 'candidate' ? 'Candidate (You)' : 'Lead Interviewer'}
+                        {seg.speaker === 'candidate'
+                          ? 'Candidate (You)'
+                          : seg.speaker === 'assistant'
+                            ? 'Applebee'
+                            : seg.speaker === 'interviewer'
+                              ? 'Lead Interviewer'
+                              : 'Speaker (unidentified)'}
                       </span>
-                      <button
-                        onClick={() => requestAnswer(seg.text)}
-                        className="opacity-0 group-hover:opacity-100 text-purple-400 hover:text-purple-300 text-[10px] flex items-center gap-1 transition-opacity"
-                        title="Analyze and answer this segment"
-                      >
-                        <HelpCircle className="w-3 h-3" />
-                        <span>Answer this</span>
-                      </button>
+                      {seg.isFinal && seg.text.trim() && seg.speaker !== 'assistant' && (
+                        <button
+                          onClick={() => requestAnswer(seg.text)}
+                          className="opacity-0 group-hover:opacity-100 text-purple-400 hover:text-purple-300 text-[10px] flex items-center gap-1 transition-opacity"
+                          title="Analyze and answer this segment"
+                        >
+                          <HelpCircle className="w-3 h-3" />
+                          <span>Answer this</span>
+                        </button>
+                      )}
                     </div>
                     <p className={`text-xs leading-relaxed ${seg.isFinal ? 'text-zinc-200' : 'text-zinc-400 italic'}`}>
                       {seg.text}
@@ -356,6 +364,11 @@ export const ThreePanelInterviewCockpit: React.FC<ThreePanelInterviewCockpitProp
                 <h2 className="text-sm font-semibold text-zinc-100 leading-snug">
                   "{currentAnswer.question}"
                 </h2>
+                {currentAnswer.generationMode === 'local_fallback' && (
+                  <p className="mt-1.5 text-[10px] text-amber-300">
+                    AI response unavailable. Showing a local reference answer.
+                  </p>
+                )}
               </div>
 
               {/* Quick Answer (Glanceable in 5 Seconds) */}

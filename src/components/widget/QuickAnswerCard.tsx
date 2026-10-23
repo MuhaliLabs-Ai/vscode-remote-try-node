@@ -119,6 +119,11 @@ export const QuickAnswerCard: React.FC<QuickAnswerCardProps> = ({
         <h3 className="text-xs font-semibold text-zinc-100 leading-snug">
           "{answer.question}"
         </h3>
+        {answer.generationMode === 'local_fallback' && (
+          <p className="mt-2 text-[10px] text-amber-300">
+            AI response unavailable. Showing a local reference answer.
+          </p>
+        )}
       </div>
 
       {/* 1. Concise Quick Answer (Glanceable) */}

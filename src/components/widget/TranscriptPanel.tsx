@@ -80,7 +80,13 @@ export const TranscriptPanel: React.FC<TranscriptPanelProps> = ({
               <div className="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
                 <div className="flex items-center gap-1">
                   <span className="font-semibold text-purple-400">
-                    {seg.speaker === 'candidate' ? 'Candidate' : 'Interviewer'}
+                    {seg.speaker === 'candidate'
+                      ? 'Candidate'
+                      : seg.speaker === 'assistant'
+                        ? 'Applebee'
+                        : seg.speaker === 'interviewer'
+                          ? 'Interviewer'
+                          : 'Speaker (unidentified)'}
                   </span>
                   <span>•</span>
                   <span className="font-mono">{formatTime(seg.timestamp)}</span>
@@ -88,14 +94,16 @@ export const TranscriptPanel: React.FC<TranscriptPanelProps> = ({
                     <span className="text-amber-400 text-[9px] font-mono">[interim...]</span>
                   )}
                 </div>
-                <button
-                  onClick={() => onSelectSegment(seg.text)}
-                  className="opacity-0 group-hover:opacity-100 text-purple-400 hover:text-purple-300 transition-opacity text-[10px] flex items-center gap-0.5 focus:opacity-100"
-                  title="Answer this transcript segment"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                  <span>Answer this</span>
-                </button>
+                {seg.isFinal && seg.text.trim() && seg.speaker !== 'assistant' && (
+                  <button
+                    onClick={() => onSelectSegment(seg.text)}
+                    className="opacity-0 group-hover:opacity-100 text-purple-400 hover:text-purple-300 transition-opacity text-[10px] flex items-center gap-0.5 focus:opacity-100"
+                    title="Answer this transcript segment"
+                  >
+                    <HelpCircle className="w-3 h-3" />
+                    <span>Answer this</span>
+                  </button>
+                )}
               </div>
               <p
                 className={`text-[11px] leading-relaxed select-text ${

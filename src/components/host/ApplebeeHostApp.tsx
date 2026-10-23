@@ -33,6 +33,14 @@ import {
 
 const INTERVIEW_ROLES = [
   'Senior .NET & Azure Cloud Architect',
+  'Senior Software Engineer',
+  'Full-Stack Engineer',
+  'Cloud Solutions Architect',
+  'Azure Platform Engineer',
+  'Technical Lead',
+  'Engineering Manager',
+  'AI Engineer',
+  'DevOps and Site Reliability Engineer',
   'Staff Distributed Systems Engineer',
   'Senior Cloud Security & Zero Trust',
   'Principal Full-Stack & Frontend Architect',
@@ -293,7 +301,7 @@ All 3 verification tests passed. Zero memory leaks detected.`);
             }`}
           >
             <User className="w-3.5 h-3.5" />
-            <span>Candidate Profile & CV</span>
+            <span>Candidate Profile</span>
           </button>
 
           {/* P1: Answer Library */}

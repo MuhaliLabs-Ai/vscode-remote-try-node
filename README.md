@@ -1,12 +1,12 @@
 # 🍎 Applebee Interview Intelligence
-### Your interview is a live system. Time to add observability.
+### Your brain is a distributed system. Add a little observability.
 
 <p align="center">
-  <strong>Hear the question. Understand the architecture. Deliver the answer.</strong>
+  <strong>Hear the question. Find the signal. Ship the answer.</strong>
 </p>
 
 <p align="center">
-  A real-time AI interview copilot for developers who would rather explain distributed systems than become one under pressure.
+  An AI interview copilot for developers whose thoughts occasionally autoscale in the wrong direction.
 </p>
 
 <p align="center">
@@ -19,34 +19,34 @@
 
 ---
 
-## 🎬 The problem: your brain has a loading spinner
+## 🎬 The problem: your brain just deployed to production
 
 The interviewer asks:
 
 > "How would you design a globally distributed, highly available API that can survive a tenfold traffic spike?"
 
-Your brain:
+Your brain's incident dashboard:
 
 ```text
-CPU:       100%
-Memory:    ??? GB
+CPU:       100% (no autoscaler configured)
+Memory:    ??? GB (heap dump inconclusive)
 Network:   Connection reset by confidence
 Latency:   4–6 business days
-Error:     SeniorEngineerException
+Error:     SeniorEngineerException: answer not found in cache
 ```
 
-Applebee is designed to help you turn that moment into a structured engineering response.
+Applebee helps turn that moment into a structured engineering response before your inner SRE starts a postmortem.
 
-It listens to authorized audio, identifies technical questions, generates concise answers and talking points, predicts follow-ups, and transforms spoken architecture discussions into visual models.
+It can analyze questions, organize concise answers and talking points, suggest follow-ups, and map technical discussion to visual models. Microphone and AI features depend on browser support, permissions, and server configuration; see the verification notes below for the current boundaries.
 
-Because knowing the answer is one thing.
+Knowing the answer is one thing.
 
-Explaining it clearly while someone silently evaluates your entire career is another.
+Explaining it clearly while someone silently evaluates your entire career is another. Especially when your brain has mistaken the whiteboard for a distributed cache.
 
 ## ⚡ Meet your interview copilot
 
 <details>
-<summary><strong>🧠 The Answer Engine — less rambling, more engineering</strong></summary>
+<summary><strong>🧠 The Answer Engine — fewer paragraphs, more signal</strong></summary>
 
 Every detected question can be organized into a practical answer structure:
 
@@ -69,12 +69,12 @@ Example question:
 05  Trace requests end-to-end and measure SLOs.
 ```
 
-The goal isn't to memorize a paragraph. It's to understand the answer well enough to defend your decisions.
+The goal isn't to memorize a paragraph. It's to understand the answer well enough to defend your decisions when the interviewer asks, "What happens when that dependency is down?" Naturally, it's always down in the follow-up.
 
 </details>
 
 <details>
-<summary><strong>🎙️ Live Audio — your words have telemetry</strong></summary>
+<summary><strong>🎙️ Live Audio — finally, observability for the conversation</strong></summary>
 
 The live voice integration is designed for bidirectional audio conversations with Gemini Live.
 
@@ -92,12 +92,12 @@ Reported capabilities include:
 
 The reported audio configuration uses 16 kHz PCM input and 24 kHz PCM output.
 
-**Developer joke:** We optimized audio latency because nobody wants their AI assistant to answer a question about Kubernetes after the interviewer has already asked about compensation.
+**Latency budget:** An answer about Kubernetes should arrive before the conversation has moved on to compensation. That's a tight SLO, even for a small system.
 
 </details>
 
 <details>
-<summary><strong>🏗️ Architecture Vision — diagrams that actually move</strong></summary>
+<summary><strong>🏗️ Architecture Vision — boxes with a reason to exist</strong></summary>
 
 Applebee's voice-to-visual engine maps recognized technical entities to architecture components and pathways.
 
@@ -111,7 +111,7 @@ Supported visualization categories include:
 - STAR behavioral responses.
 - Troubleshooting and triage workflows.
 
-The intent is to make abstract technical explanations easier to follow, recall, and discuss.
+The intent is to make abstract technical explanations easier to follow, recall, and discuss. A diagram is not production-ready merely because it contains enough arrows to qualify as a network map.
 
 ```text
                  ┌──────────────────┐
@@ -144,7 +144,7 @@ This is an illustrative architecture, not a claim that every service is deployed
 </details>
 
 <details>
-<summary><strong>🔎 Google Search Grounding — citations, not confidence cosplay</strong></summary>
+<summary><strong>🔎 Google Search Grounding — receipts for confident answers</strong></summary>
 
 The reported Gemini integration uses Google Search grounding to retrieve supporting information.
 
@@ -157,7 +157,7 @@ The interface is designed to expose:
 
 Useful documentation targets include Microsoft Learn, the Azure Architecture Center, OWASP, AWS documentation, Google Cloud documentation, and MDN.
 
-Grounding improves traceability, but it does not guarantee correctness. Check cited sources before relying on recommendations in an interview or production system.
+Grounding improves traceability, but it does not guarantee correctness. A citation is evidence to inspect, not a hall pass from reading the docs. Check sources before relying on recommendations in an interview or production system.
 
 </details>
 
@@ -183,7 +183,7 @@ The simulator is a development aid. It does not, by itself, prove that the appli
 </details>
 
 <details>
-<summary><strong>🎯 Mock Interviews — boss fights without the respawn timer</strong></summary>
+<summary><strong>🎯 Mock Interviews — practice incidents with no pager</strong></summary>
 
 The mock interviewer and Bar Raiser evaluator are designed to assess answers across four dimensions:
 
@@ -196,7 +196,7 @@ The mock interviewer and Bar Raiser evaluator are designed to assess answers acr
 
 The reported evaluator generates a score out of 100, identifies strengths, and suggests concrete improvements.
 
-Use it to find weaknesses before a real interview finds them for you.
+Use it to find weak spots before a real interview turns them into a live debugging exercise.
 
 </details>
 
@@ -229,7 +229,7 @@ The flagship experience is organized into three panels.
 | 🧠 Center | Detected question, quick answer, talking points, trade-offs, and deep dive |
 | 🗺️ Right | Architecture diagrams, follow-up predictions, and source references |
 
-The design principle: **show the most useful information first, then reveal complexity on demand.**
+The design principle: **show the useful signal first; put the rest behind a switch.** Even interfaces deserve a reasonable noise budget.
 
 No 40-paragraph answer when five clear bullets will do.
 
@@ -243,21 +243,24 @@ No pretending that a confident tone is the same thing as a correct answer.
 
 ```mermaid
 flowchart TD
-    A[Authorized Microphone Input] --> B[Audio Streaming]
-    B --> C[Gemini Live Session]
-    C --> D[Transcript and Voice Response]
-    D --> E[Question Detection]
-    E --> F[Structured Answer Engine]
-    F --> G[Talking Points and Trade-offs]
-    D --> H[Voice-to-Visual Mapper]
-    H --> I[Architecture and Workflow Diagrams]
-    F --> J[Answer Library]
-    F --> K[Mock Interview Evaluator]
-    K --> L[Readiness Analytics]
-    M[Gemini Search Grounding] --> F
-    N[Candidate Profile] --> F
-    F --> O[React Web Cockpit]
-    F --> P[Expo Mobile Client]
+  A[Browser SpeechRecognition] --> B[Transcript Segments]
+  B --> C[Question Detection and Deduplication]
+  C --> D[POST /api/interview/answer]
+  E[Typed Web Question] --> D
+  D --> F[Gemini Answer, if configured]
+  D --> G[Question-specific local reference, if available]
+  H[Google Search Grounding, if configured] --> F
+  I[Candidate-reported Profile] --> F
+  F --> J[Structured Answer and Provenance]
+  J --> K[React Web Cockpit]
+  J --> L[Answer Library]
+  M[Live Voice Mic] --> N[WebSocket /live]
+  N --> O[Gemini Live, if configured]
+  O --> P[Voice Output and Transcription Events]
+  P --> C
+  O --> Q[Voice-to-Visual Mapper]
+  R[Expo Typed Question] --> D
+  J --> S[Mock Evaluation and Readiness]
 ```
 
 ### Technology stack
@@ -332,7 +335,7 @@ npm run lint
 npm run build
 ```
 
-Check `package.json` for the actual script definitions. In particular, `npm run lint` may be configured as a TypeScript check rather than a conventional linting tool.
+Check `package.json` for the actual script definitions. Here, `npm run lint` runs TypeScript, not a style linter. The name is aspirational; the compiler is not.
 
 ---
 
@@ -365,32 +368,15 @@ The development machine and mobile device generally need network connectivity to
 
 ## 🧪 Quality checks and verification
 
-The implementation report supplied for this project records the following test milestones:
+The current root checks are:
 
-| Reported milestone | Reported result |
-|---|---:|
-| Initial automated test suite | 23/23 passing |
-| Expo Go integration test milestone | 25/25 passing |
-| Voice-to-visual integration milestone | 29/29 passing |
-| TypeScript check | 0 reported errors |
-| Vite production build | Reported successful |
+| Command | Current result |
+|---|---|
+| `npm test` | 14 application behavior tests passed |
+| `npm run lint` | TypeScript check passed |
+| `npm run build` | Vite production build passed |
 
-These are results from the supplied implementation report, not independently reproduced test runs in this README.
-
-The milestones appear to describe successive implementation stages, not three separate test suites that should be added together.
-
-### Reported areas covered
-
-- Legal state-machine transitions.
-- Microphone resource release on session stop.
-- Floating-widget viewport boundaries and coordinate persistence.
-- Audio sample-rate configuration.
-- Google Search grounding tool configuration.
-- .NET and Azure architecture topology.
-- Candidate profile grounding.
-- Mock interview scoring.
-- Expo configuration and microphone permissions.
-- Voice-to-visual synchronization.
+The server was also smoke-tested without `GEMINI_API_KEY`: the C# polymorphism local reference returned a relevant, unverified answer; unsupported questions, search grounding, and Live Voice reported unavailable; ordinary transcript statements were not detected as questions; and local evaluation was labeled heuristic.
 
 ### What still needs real-world verification?
 
@@ -398,11 +384,11 @@ Passing unit tests is a useful milestone. It is not the finish line.
 
 Before describing the product as production-ready, verify:
 
-- Real Gemini Live sessions using valid, supported model identifiers.
-- End-to-end audio in both directions on supported browsers and devices.
+- Real Gemini answer generation, Google Search grounding, and Live Voice with a valid API key and provider-supported model identifiers.
+- Browser microphone permissions and SpeechRecognition support on target browsers.
 - API authentication, rate limits, retries, and failure handling.
 - Search grounding responses and source-link validity.
-- Physical-device Expo Go behavior.
+- Physical-device Expo Go behavior; its current client records locally but does not transcribe or stream audio.
 - Mobile network interruptions and microphone lifecycle cleanup.
 - Accessibility, keyboard navigation, and responsive layouts.
 - Privacy, consent, retention, and deletion behavior.
@@ -425,7 +411,7 @@ Before describing the product as production-ready, verify:
 
 **Debugging philosophy:** reproduce the failure, inspect the evidence, isolate the cause, fix it, and add a regression test.
 
-Deleting `node_modules` is a tool, not a personality.
+Deleting `node_modules` is a debugging technique, not a personality. Reinstalling it before checking the error message is how you get a very clean copy of the same problem.
 
 ---
 
@@ -462,13 +448,13 @@ AI-generated answers can be incomplete, outdated, or incorrect. Understand and v
 - [ ] Establish performance benchmarks and operational SLOs.
 - [ ] Add documented release, rollback, and security-review procedures.
 
-Contributions should include reproducible test cases and clear evidence for changes that affect live audio, security, or architecture behavior.
+Contributions should include reproducible test cases and clear evidence for changes that affect live audio, security, or architecture behavior. "It worked on my machine" is useful telemetry, but it is not a test strategy.
 
 ---
 
 ## 🤝 Contributing
 
-Found a bug? Have a better architecture? Think a component deserves a circuit breaker?
+Found a bug? Have a better architecture? Think a component deserves a circuit breaker and a quiet place to recover?
 
 Contributions are welcome.
 

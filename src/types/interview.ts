@@ -23,7 +23,7 @@ export interface TranscriptSegment {
   timestamp: number;
   isFinal: boolean;
   confidence?: number;
-  speaker?: 'interviewer' | 'candidate';
+  speaker?: 'interviewer' | 'candidate' | 'assistant' | 'unknown';
 }
 
 export interface SourceReference {
@@ -67,6 +67,7 @@ export interface AnswerModel {
   searchGrounded?: boolean;
   webSearchQueries?: string[];
   personalizedProjectContext?: string;
+  generationMode?: 'ai' | 'local_fallback';
 }
 
 export type WidgetCorner =
@@ -115,6 +116,7 @@ export interface CandidateProfile {
 
 export interface MockEvaluationResult {
   score: number;
+  evaluationMode?: 'ai' | 'heuristic';
   feedback: string;
   rubricScores: {
     clarityAndStructure: number;

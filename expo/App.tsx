@@ -11,6 +11,8 @@ import {
   PanResponder,
   Animated,
   Share,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Audio } from 'expo-av';
 
@@ -169,9 +171,9 @@ const FloatingMobileWidget: React.FC<FloatingWidgetProps> = ({
                   <Text style={styles.miniLogoText}>AB</Text>
                 </View>
                 <View>
-                  <Text style={styles.floatingTitle}>Applebee Live Copilot</Text>
+                  <Text style={styles.floatingTitle}>Applebee Copilot</Text>
                   <Text style={styles.floatingSubtitle}>
-                    {isVoiceActive ? 'Voice Transcribing Live' : isListening ? 'Listening' : 'Floating Widget'}
+                    {isVoiceActive ? 'Voice sync demo' : isListening ? 'Recording audio' : 'Floating Widget'}
                   </Text>
                 </View>
               </View>
@@ -209,15 +211,15 @@ const FloatingMobileWidget: React.FC<FloatingWidgetProps> = ({
                 <View style={styles.liveVoiceIndicator}>
                   <View style={[styles.pulseDot, isVoiceActive && styles.pulseDotActive]} />
                   <Text style={styles.transcriptionTitle}>
-                    {isVoiceActive ? 'LIVE VOICE TRANSCRIBING...' : 'LIVE VOICE TRANSCRIPT'}
+                    {isVoiceActive ? 'VOICE-TO-VISUAL DEMO' : 'AUDIO TRANSCRIPTION'}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={onTriggerVoiceSync}>
-                  <Text style={styles.voiceSyncBtnText}>⚡ Test Voice Sync</Text>
+                  <Text style={styles.voiceSyncBtnText}>Run demo</Text>
                 </TouchableOpacity>
               </View>
               <Text style={styles.transcriptionText}>
-                {liveVoiceTranscript || 'Listening for interviewer voice questions... Spoken answers convert to visual diagrams in real time.'}
+                {liveVoiceTranscript || 'Mobile audio capture is not transcribed. Use the web cockpit for speech recognition.'}
               </Text>
             </View>
 
@@ -304,41 +306,77 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [activeTab, setActiveTab] = useState<'copilot' | 'transcript' | 'visual' | 'profile'>('copilot');
+  const [serverUrl, setServerUrl] = useState('');
+  const [questionInput, setQuestionInput] = useState('');
+  const [isAnswerLoading, setIsAnswerLoading] = useState(false);
+  const [answerError, setAnswerError] = useState('');
 
   // Live Voice Response Transcription & Voice-to-Visual Synchronization
-  const [liveVoiceTranscript, setLiveVoiceTranscript] = useState(
-    'For a scalable .NET API on Azure, client ingress passes through Azure API Management before routing to stateless ASP.NET Core API microservices with Redis caching.'
-  );
-  const [activeSpokenEntities, setActiveSpokenEntities] = useState<string[]>([
-    'Azure API Mgmt',
-    'ASP.NET Core API',
-  ]);
+  const [liveVoiceTranscript, setLiveVoiceTranscript] = useState('');
+  const [activeSpokenEntities, setActiveSpokenEntities] = useState<string[]>([]);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
 
-  // Active answer model
+  // Empty until the backend returns an answer for a user-entered question.
   const [currentAnswer, setCurrentAnswer] = useState({
-    question: 'How would you design a scalable .NET API on Azure?',
-    quickAnswer: 'Use a stateless ASP.NET Core API, secure authentication, managed data storage, appropriate scaling, caching where beneficial, and end-to-end observability.',
-    talkingPoints: [
-      'Security: authentication, authorisation (Azure AD / Entra ID), secret management via Azure Key Vault.',
-      'Scalability: stateless services on Azure App Service / AKS and horizontal scaling where appropriate.',
-      'Reliability: timeouts, retries with exponential backoff using Polly, and resilience circuit breaker patterns.',
-      'Performance: Azure Cache for Redis and database query optimisation.',
-      'Observability: structured logs, metrics, distributed tracing via Azure Monitor & Application Insights.',
-    ],
-    explanation: 'A resilient Azure cloud API decouples client ingress via Azure API Management, directing requests to autoscaling ASP.NET Core container instances. Token verification occurs at the gateway layer, while downstream state operations leverage connection-pooled Azure SQL / Cosmos DB with Redis read-through caching to hit sub-5ms p99 latency SLAs.',
-    tradeoffs: [
-      'Managed cloud PaaS services reduce operational toil but increase vendor coupling.',
-      'Multi-region active-active databases require conflict resolution strategies (e.g. Cosmos DB multi-master).',
-    ],
-    followUp: 'How would you handle database bottlenecks when traffic spikes 10x?',
+    question: '',
+    quickAnswer: '',
+    talkingPoints: [] as string[],
+    explanation: '',
+    tradeoffs: [] as string[],
+    followUp: '',
   });
 
-  const [transcript, setTranscript] = useState([
-    { id: '1', speaker: 'Interviewer', text: 'Welcome Alex. Let us start with a distributed cloud architecture scenario.', time: '10:02 AM' },
-    { id: '2', speaker: 'Candidate', text: 'Sounds great. Ready when you are.', time: '10:02 AM' },
-    { id: '3', speaker: 'Interviewer', text: 'How would you design a scalable .NET API on Azure to handle high burst throughput?', time: '10:03 AM' },
-  ]);
+  const [transcript, setTranscript] = useState<{ id: string; speaker: string; text: string; time: string }[]>([]);
+
+  const requestAnswer = async () => {
+    const apiBaseUrl = serverUrl.trim().replace(/\/+$/, '');
+    const question = questionInput.trim();
+    if (!apiBaseUrl || !question) {
+      setAnswerError('Enter the web server URL and an interview question.');
+      return;
+    }
+
+    setIsAnswerLoading(true);
+    setAnswerError('');
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/interview/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          role: 'Senior .NET & Azure Cloud Architect',
+          useSearchGrounding: true,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Answer service returned HTTP ${response.status}`);
+      if (typeof data.quickAnswer !== 'string' || !Array.isArray(data.talkingPoints)) {
+        throw new Error('The answer service returned an incomplete response.');
+      }
+      setCurrentAnswer({
+        question: data.question || question,
+        quickAnswer: data.quickAnswer,
+        talkingPoints: data.talkingPoints,
+        explanation: data.explanation || '',
+        tradeoffs: data.tradeoffs || [],
+        followUp: data.followUps?.[0] || '',
+      });
+      setTranscript((current) => [
+        ...current,
+        {
+          id: `typed_${Date.now()}`,
+          speaker: 'You (typed)',
+          text: question,
+          time: new Date().toLocaleTimeString(),
+        },
+      ]);
+      setQuestionInput('');
+    } catch (error) {
+      setAnswerError(error instanceof Error ? error.message : 'Could not reach the answer service.');
+    } finally {
+      setIsAnswerLoading(false);
+    }
+  };
 
   // Request microphone permission via Expo AV
   const startRecording = async () => {
@@ -361,7 +399,7 @@ export default function App() {
       setRecording(newRecording);
       setIsRecording(true);
     } catch (err) {
-      console.warn('Failed to start recording', err);
+      setAnswerError(err instanceof Error ? err.message : 'Could not start microphone recording.');
     }
   };
 
@@ -370,7 +408,9 @@ export default function App() {
     if (recording) {
       try {
         await recording.stopAndUnloadAsync();
-      } catch {}
+      } catch (err) {
+        setAnswerError(err instanceof Error ? err.message : 'Could not stop microphone recording.');
+      }
       setRecording(null);
     }
   };
@@ -440,7 +480,7 @@ export default function App() {
           style={[styles.recordButton, isRecording ? styles.recordButtonActive : styles.recordButtonInactive]}
         >
           <View style={[styles.statusDot, isRecording ? styles.statusDotActive : styles.statusDotInactive]} />
-          <Text style={styles.recordButtonText}>{isRecording ? 'Listening...' : 'Listen'}</Text>
+          <Text style={styles.recordButtonText}>{isRecording ? 'Recording' : 'Record audio'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -448,6 +488,42 @@ export default function App() {
       <View style={styles.content}>
         {activeTab === 'copilot' && (
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>ASK THE ANSWER SERVICE</Text>
+              <TextInput
+                value={serverUrl}
+                onChangeText={setServerUrl}
+                placeholder="Web server URL, e.g. http://192.168.1.20:3000"
+                placeholderTextColor="#71717a"
+                autoCapitalize="none"
+                keyboardType="url"
+                style={styles.questionInput}
+              />
+              <TextInput
+                value={questionInput}
+                onChangeText={setQuestionInput}
+                placeholder="Enter an interview question"
+                placeholderTextColor="#71717a"
+                style={styles.questionInput}
+                onSubmitEditing={requestAnswer}
+                returnKeyType="send"
+              />
+              <TouchableOpacity
+                onPress={requestAnswer}
+                disabled={isAnswerLoading}
+                style={[styles.askButton, isAnswerLoading && styles.askButtonDisabled]}
+              >
+                {isAnswerLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.askButtonText}>Generate answer</Text>}
+              </TouchableOpacity>
+              {!!answerError && <Text style={styles.errorText}>{answerError}</Text>}
+              <Text style={styles.transcriptionText}>
+                Audio recording is local only. This mobile client does not transcribe or stream microphone audio.
+              </Text>
+            </View>
+            {!currentAnswer.question ? (
+              <Text style={styles.emptyStateText}>Your structured answer will appear here after you submit a question.</Text>
+            ) : (
+              <>
             {/* Detected Question Banner */}
             <View style={styles.questionCard}>
               <View style={styles.tagRow}>
@@ -489,12 +565,15 @@ export default function App() {
               <Text style={styles.followUpLabel}>LIKELY INTERVIEWER FOLLOW-UP:</Text>
               <Text style={styles.followUpText}>"{currentAnswer.followUp}"</Text>
             </View>
+              </>
+            )}
           </ScrollView>
         )}
 
         {activeTab === 'transcript' && (
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.sectionHeader}>Live Spoken Audio Feed</Text>
+            <Text style={styles.sectionHeader}>Question History</Text>
+            {transcript.length === 0 && <Text style={styles.emptyStateText}>No questions submitted yet. Recorded audio is not transcribed in this mobile client.</Text>}
             {transcript.map((seg) => (
               <View key={seg.id} style={styles.transcriptCard}>
                 <View style={styles.transcriptMeta}>
@@ -542,13 +621,11 @@ export default function App() {
 
         {activeTab === 'profile' && (
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.sectionHeader}>Candidate Verified Profile</Text>
+            <Text style={styles.sectionHeader}>Candidate Profile</Text>
             <View style={styles.card}>
               <Text style={styles.cardTitle}>CANDIDATE DETAILS</Text>
-              <Text style={styles.profileName}>Alex Mercer</Text>
               <Text style={styles.profileRole}>Senior .NET & Azure Cloud Architect</Text>
-              <Text style={styles.profileExp}>9 Years Professional Experience</Text>
-              <Text style={styles.profileSkills}>Tech Stack: C# .NET 9, Azure, AKS, Redis, Cosmos DB, Kafka</Text>
+              <Text style={styles.profileExp}>Personal profile details are not configured in this mobile client.</Text>
             </View>
           </ScrollView>
         )}
@@ -705,6 +782,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
+  },
+  questionInput: {
+    backgroundColor: '#09090b',
+    borderColor: '#3f3f46',
+    borderWidth: 1,
+    borderRadius: 8,
+    color: '#f4f4f5',
+    fontSize: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    marginBottom: 8,
+  },
+  askButton: {
+    alignItems: 'center',
+    backgroundColor: '#7c3aed',
+    borderRadius: 8,
+    minHeight: 38,
+    justifyContent: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 12,
+  },
+  askButtonDisabled: {
+    opacity: 0.65,
+  },
+  askButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#fda4af',
+    fontSize: 11,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    color: '#a1a1aa',
+    fontSize: 12,
+    lineHeight: 18,
+    padding: 12,
   },
   quickAnswerCard: {
     backgroundColor: '#3b0764',

@@ -33,9 +33,11 @@ export const ReadinessDashboard: React.FC<ReadinessDashboardProps> = ({ session 
         <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-zinc-800">
           <div className="text-[10px] font-mono text-zinc-400">OVERALL READINESS</div>
           <div className="text-xl font-bold font-mono text-emerald-400 mt-0.5">
-            {readinessMetrics.averageConfidence}%
+            {session.mockEvaluation ? `${readinessMetrics.averageConfidence}%` : 'Not scored'}
           </div>
-          <div className="text-[10px] text-zinc-500 mt-1">Staff Engineer Baseline Met</div>
+          <div className="text-[10px] text-zinc-500 mt-1">
+            {session.mockEvaluation ? 'Based on the latest evaluation' : 'Complete a mock evaluation to get a score'}
+          </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-zinc-800">
@@ -55,11 +57,13 @@ export const ReadinessDashboard: React.FC<ReadinessDashboardProps> = ({ session 
         </div>
 
         <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-zinc-800">
-          <div className="text-[10px] font-mono text-zinc-400">VERIFIED PROFILE</div>
+          <div className="text-[10px] font-mono text-zinc-400">CANDIDATE PROFILE</div>
           <div className="text-xs font-semibold text-zinc-200 mt-1 truncate">
-            {candidateProfile.name}
+            {candidateProfile.name || 'No name provided'}
           </div>
-          <div className="text-[10px] text-zinc-500 truncate">{candidateProfile.yearsOfExperience} yrs exp • {candidateProfile.primarySkills.slice(0, 2).join(', ')}</div>
+          <div className="text-[10px] text-zinc-500 truncate">
+            {candidateProfile.yearsOfExperience || 'Not provided'} yrs exp • {candidateProfile.primarySkills.slice(0, 2).join(', ') || 'No skills added'}
+          </div>
         </div>
       </div>
 
@@ -90,7 +94,9 @@ export const ReadinessDashboard: React.FC<ReadinessDashboardProps> = ({ session 
 
           <div className="p-3 rounded-lg bg-zinc-950/60 border border-zinc-800/80 text-[11px] text-zinc-400 leading-relaxed">
             <strong className="text-zinc-200 font-medium">Readiness Insight: </strong>
-            High proficiency demonstrated in Azure and distributed caching. Reviewing Polly resilience pipelines and Cosmos DB multi-master write conflict strategies will maximize pass rates in Round 3.
+            {answerHistory.length > 0
+              ? `Analyzed ${answerHistory.length} answer${answerHistory.length === 1 ? '' : 's'}. Coverage increases as you practice questions in each topic.`
+              : 'No answers analyzed yet. Submit practice questions to begin building topic coverage.'}
           </div>
         </div>
 
