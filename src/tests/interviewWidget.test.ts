@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { generateConceptFallbackAnswer } from '../services/answerFallback';
 import { detectLocalQuestion } from '../services/questionDetection';
 import { getSpeechSegmentId } from '../services/speechRecognition';
+import { findAvailablePort } from '../utils/portResolver';
 import { isSpokenEntityActive, mapSpokenTranscriptToVisual } from '../utils/voiceVisualMapper';
 import type { VisualizationModel } from '../types/interview';
 
@@ -98,6 +99,33 @@ test('spoken entity matching handles labels case-insensitively', () => {
 
 test('spoken entity matching returns false for unrelated entities', () => {
   assert.equal(isSpokenEntityActive('Azure SQL', ['Azure Cache for Redis']), false);
+});
+
+test('port resolver picks a free port when the default is occupied', async () => {
+  const occupiedPort = 41000;
+  const server = await import('node:net').then(({ createServer }) => {
+    const testServer = createServer();
+    return new Promise<{ port: number; close: () => Promise<void> }>((resolve) => {
+      testServer.listen(occupiedPort, '127.0.0.1', () => {
+        resolve({
+          port: occupiedPort,
+          close: () =>
+            new Promise<void>((closeResolve, closeReject) => {
+              testServer.close((err) => (err ? closeReject(err) : closeResolve()));
+            }),
+        });
+      });
+    });
+  });
+
+  try {
+    const resolvedPort = await findAvailablePort(occupiedPort, 5);
+    assert.notEqual(resolvedPort, occupiedPort);
+    assert.ok(Number.isInteger(resolvedPort));
+    assert.ok(resolvedPort >= 0 && resolvedPort <= 65535);
+  } finally {
+    await server.close();
+  }
 });
 
 console.log(`\n${passed} application behavior tests passed.`);

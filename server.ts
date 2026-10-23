@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateConceptFallbackAnswer } from './src/services/answerFallback';
 import { detectLocalQuestion } from './src/services/questionDetection';
+import { findAvailablePort } from './src/utils/portResolver';
 
 dotenv.config();
 
@@ -15,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === 'production';
-const PORT = process.env.PORT || 3000;
+const DEFAULT_PORT = Number(process.env.PORT || 3000);
 
 // Initialize GoogleGenAI SDK with user-agent telemetry header
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -901,10 +902,15 @@ async function startServer() {
     });
   }
 
-  httpServer.listen(Number(PORT), '0.0.0.0', () => {
+  const PORT = await findAvailablePort(DEFAULT_PORT);
+
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Applebee Live Interview server running at http://0.0.0.0:${PORT}`);
     console.log(`Gemini 3.8 Live API WebSocket available at ws://0.0.0.0:${PORT}/live`);
   });
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error('Failed to start Applebee server:', error);
+  process.exit(1);
+});

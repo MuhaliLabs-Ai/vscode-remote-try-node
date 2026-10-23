@@ -341,13 +341,13 @@ Check `package.json` for the actual script definitions. Here, `npm run lint` run
 
 ## 📲 Run the mobile client
 
-From the repository root:
+From the repository root, start the Expo companion with:
 
 ```bash
-cd expo
-npm install
-npx expo start
+./run-expo.sh
 ```
+
+The launcher installs Expo dependencies when needed. Add Expo CLI options after the script name, such as `./run-expo.sh --tunnel`. See [README_EXPO_APP.md](README_EXPO_APP.md) for device connection and setup notes.
 
 Then open the development project using Expo Go on a compatible device.
 
